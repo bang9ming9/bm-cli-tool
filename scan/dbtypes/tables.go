@@ -2,11 +2,12 @@ package dbtypes
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"gorm.io/gorm"
 )
 
 type ICreate interface {
-	Create(db *gorm.DB) error
+	Create(db *gorm.DB, log types.Log) error
 }
 
 type Raw struct {
@@ -23,30 +24,28 @@ type ERC20Transfer struct {
 
 type ERC1155Transfer struct {
 	Raw
+	Index    int `gorm:"primaryKey"`
 	Operator common.Address
 	From     common.Address
 	To       common.Address
-	Ids      []*BigInt
-	Values   []*BigInt
+	Id       *BigInt
+	Value    *BigInt
 }
 
 type GovernorProposalCreated struct {
 	Raw
-	ProposalId  *BigInt `gorm:"primaryKey"`
+	ProposalId  *BigInt
 	Proposer    common.Address
-	Targets     []common.Address
-	Values      []*BigInt
-	Signatures  []string
-	Calldatas   [][]byte
+	Targets     *AddressList
+	Values      *BigIntList
+	Signatures  *StringList
+	Calldatas   *BytesList
 	VoteStart   *BigInt
 	VoteEnd     *BigInt
 	Description string
 }
 
-type GovernorProposalCancel struct {
+type GovernorProposalCanceled struct {
 	Raw
-	TxHash  common.Hash
-	Block   uint64
-	Targets []common.Address
-	Values  []*BigInt
+	ProposalId *BigInt
 }

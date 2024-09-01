@@ -1,89 +1,112 @@
 package scan
 
-// import (
-// 	"reflect"
+import (
+	"reflect"
 
-// 	gov "github.com/bang9ming9/bm-governance/abis"
-// 	"github.com/ethereum/go-ethereum/accounts/abi"
-// 	"github.com/ethereum/go-ethereum/common"
-// 	"github.com/ethereum/go-ethereum/core/types"
-// 	"gorm.io/gorm"
-// )
+	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
+	gov "github.com/bang9ming9/bm-governance/abis"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+)
 
-// type ERC1155Scanner struct {
-// 	address common.Address
-// 	abi     *abi.ABI
-// 	topics  map[common.Hash]struct {
-// 		name string
-// 		out  reflect.Type
-// 	}
-// }
+type ERC1155Scanner struct {
+	address common.Address
+	abi     *abi.ABI
+	types   map[common.Hash]reflect.Type // event.ID => EventType
+	logger  *logrus.Entry
+}
 
-// func NewERC1155Scanner(address common.Address) (*ERC1155Scanner, error) {
-// 	aBI, err := gov.BmErc1155MetaData.GetAbi()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	topics := map[common.Hash]struct {
-// 		name string
-// 		out  reflect.Type
-// 	}{
-// 		aBI.Events["TransferBatch"].ID: {"TransferBatch", reflect.TypeOf(BmErc1155TransferBatch{})},
-// 	}
-// 	return &ERC1155Scanner{address, aBI, topics}, nil
-// }
+func NewERC1155Scanner(address common.Address, logger *logrus.Logger) (*ERC1155Scanner, error) {
+	aBI, err := gov.BmErc1155MetaData.GetAbi()
+	if err != nil {
+		return nil, err
+	}
+	types := map[common.Hash]reflect.Type{
+		aBI.Events["TransferSingle"].ID: reflect.TypeOf(BmErc1155TransferSingle{}),
+		aBI.Events["TransferBatch"].ID:  reflect.TypeOf(BmErc1155TransferBatch{}),
+	}
+	if _, ok := types[common.Hash{}]; ok {
+		return nil, errors.Wrap(ErrInvalidEventID, "ERC1155Scanner")
+	}
 
-// func (s *ERC1155Scanner) Address() common.Address {
-// 	return s.address
-// }
+	return &ERC1155Scanner{address, aBI, types, logger.WithField("scanner", "ERC1155Scanner")}, nil
+}
 
-// func (s *ERC1155Scanner) Topics() []common.Hash {
-// 	ids := make([]common.Hash, len(s.topics))
-// 	index := 0
-// 	for id := range s.topics {
-// 		ids[index] = id
-// 		index++
-// 	}
-// 	return ids
-// }
+func (s *ERC1155Scanner) Address() common.Address {
+	return s.address
+}
 
-// func (s *ERC1155Scanner) Parse(log types.Log) (ICreate, error) {
-// 	// Anonymous events are not supported.
-// 	if len(log.Topics) == 0 {
-// 		return nil, ErrNoEventSignature
-// 	}
-// 	topic, ok := s.topics[log.Topics[0]]
-// 	if !ok {
-// 		return nil, ErrEventSignatureMismatch
-// 	}
-// 	out := reflect.New(topic.out).Interface()
-// 	event := topic.name
-// 	if len(log.Data) > 0 {
-// 		if err := s.abi.UnpackIntoInterface(&out, event, log.Data); err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	var indexed abi.Arguments
-// 	for _, arg := range s.abi.Events[event].Inputs {
-// 		if arg.Indexed {
-// 			indexed = append(indexed, arg)
-// 		}
-// 	}
-// 	return out.(ICreate), abi.ParseTopics(out, indexed, log.Topics[1:])
-// }
+func (s *ERC1155Scanner) Topics() []common.Hash {
+	ids := make([]common.Hash, len(s.types))
+	index := 0
+	for id := range s.types {
+		ids[index] = id
+		index++
+	}
+	return ids
+}
 
-// type BmErc1155TransferBatch gov.BmErc1155TransferBatch
+func (s *ERC1155Scanner) Save(db *gorm.DB, log types.Log) error {
+	logger := s.logger.WithField("log", log)
+	logger.Debug("Save")
 
-// func (event *BmErc1155TransferBatch) Create(db *gorm.DB) error {
-// 	record := &ERC1155Transfer{
-// 		Raw: Raw{
-// 			TxHash: event.Raw.TxHash,
-// 			Block:  event.Raw.BlockNumber,
-// 		},
-// 		From:   event.From,
-// 		To:     event.To,
-// 		Ids:    event.Ids,
-// 		Values: event.Values,
-// 	}
-// 	return db.Create(record).Error
-// }
+	logger = logger.WithField("method", "Save")
+	// Anonymous events are not supported.
+	if len(log.Topics) == 0 {
+		logger.Error(ErrNoEventSignature)
+		return nil
+	}
+	out, err := parse(log, s.types[log.Topics[0]], s.abi)
+	if err != nil {
+		logger.Error(err)
+		return nil
+	}
+
+	return errors.Wrap(out.Create(db, log), "ERC1155Scanner")
+}
+
+type BmErc1155TransferSingle gov.BmErc1155TransferSingle
+
+func (event *BmErc1155TransferSingle) Create(db *gorm.DB, log types.Log) error {
+	record := &dbtypes.ERC1155Transfer{
+		Raw: dbtypes.Raw{
+			TxHash: log.TxHash,
+			Block:  log.BlockNumber,
+		},
+		Index:    0,
+		Operator: event.Operator,
+		From:     event.From,
+		To:       event.To,
+		Id:       (*dbtypes.BigInt)(event.Id),
+		Value:    (*dbtypes.BigInt)(event.Value),
+	}
+	return db.Create(record).Error
+}
+
+type BmErc1155TransferBatch gov.BmErc1155TransferBatch
+
+func (event *BmErc1155TransferBatch) Create(db *gorm.DB, log types.Log) error {
+	length := len(event.Ids)
+	for i := 0; i < length; i++ {
+		record := &dbtypes.ERC1155Transfer{
+			Raw: dbtypes.Raw{
+				TxHash: log.TxHash,
+				Block:  log.BlockNumber,
+			},
+			Index:    i,
+			Operator: event.Operator,
+			From:     event.From,
+			To:       event.To,
+			Id:       (*dbtypes.BigInt)(event.Ids[i]),
+			Value:    (*dbtypes.BigInt)(event.Values[i]),
+		}
+		if err := db.Create(record).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}

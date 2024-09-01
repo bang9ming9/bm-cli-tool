@@ -28,16 +28,15 @@ func NewERC20Scanner(address common.Address, logger *logrus.Logger) (*ERC20Scann
 	types := map[common.Hash]reflect.Type{
 		aBI.Events["Transfer"].ID: reflect.TypeOf(BmErc20Transfer{}),
 	}
+	if _, ok := types[common.Hash{}]; ok {
+		return nil, errors.Wrap(ErrInvalidEventID, "ERC20Scanner")
+	}
 
 	return &ERC20Scanner{address, aBI, types, logger.WithField("scanner", "ERC20Scanner")}, nil
 }
 
 func (s *ERC20Scanner) Address() common.Address {
 	return s.address
-}
-
-func (s *ERC20Scanner) ABI() *abi.ABI {
-	return s.abi
 }
 
 func (s *ERC20Scanner) Topics() []common.Hash {
@@ -66,16 +65,16 @@ func (s *ERC20Scanner) Save(db *gorm.DB, log types.Log) error {
 		return nil
 	}
 
-	return errors.Wrap(out.Create(db), "ERC20Scanner")
+	return errors.Wrap(out.Create(db, log), "ERC20Scanner")
 }
 
 type BmErc20Transfer gov.BmErc20Transfer
 
-func (event *BmErc20Transfer) Create(db *gorm.DB) error {
+func (event *BmErc20Transfer) Create(db *gorm.DB, log types.Log) error {
 	record := &dbtypes.ERC20Transfer{
 		Raw: dbtypes.Raw{
-			TxHash: event.Raw.TxHash,
-			Block:  event.Raw.BlockNumber,
+			TxHash: log.TxHash,
+			Block:  log.BlockNumber,
 		},
 		From:  event.From,
 		To:    event.To,

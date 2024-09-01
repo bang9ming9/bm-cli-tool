@@ -136,17 +136,18 @@ func prepareFilter(_ *gorm.DB, scanners ...IScanner) (map[common.Address]IScanne
 	//     ) AS Blocks;
 	// `
 	addresses := make([]common.Address, len(scanners))
-	topics := make([][]common.Hash, len(scanners))
+	topics0 := make([]common.Hash, 0)
+
 	scannerMap := make(map[common.Address]IScanner)
 	for i, scanner := range scanners {
 		addresses[i] = scanner.Address()
-		topics[i] = scanner.Topics()
 		scannerMap[scanner.Address()] = scanner
+		topics0 = append(topics0, scanner.Topics()...)
 	}
 
 	return scannerMap, ethereum.FilterQuery{
 		Addresses: addresses,
-		Topics:    topics,
+		Topics:    [][]common.Hash{topics0},
 		FromBlock: new(big.Int),
 		ToBlock:   new(big.Int),
 	}, 0
@@ -158,6 +159,7 @@ func prepareFilter(_ *gorm.DB, scanners ...IScanner) (map[common.Address]IScanne
 
 var (
 	ErrNoEventSignature       = errors.New("no event signature")
+	ErrInvalidEventID         = errors.New("invalid eventID exists")
 	ErrEventSignatureMismatch = errors.New("event signature mismatch")
 	ErrNonTargetedEvent       = errors.New("non-targeted event")
 )
