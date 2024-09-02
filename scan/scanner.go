@@ -29,6 +29,7 @@ var Command = &cli.Command{
 	Name:  "scanner",
 	Flags: []cli.Flag{flags.ConfigFlag},
 	Action: func(ctx *cli.Context) error {
+		// logger 설정
 		logger := logrus.New()
 		logger.SetFormatter(&logrus.TextFormatter{
 			ForceColors:      true,
@@ -36,6 +37,7 @@ var Command = &cli.Command{
 			DisableTimestamp: false,
 			TimestampFormat:  "2006-01-02 15:04:05",
 		})
+		// TODO logger 설정 flag 및 Config 로 변경 가능할수 있도록 수정
 		logger.SetLevel(logrus.TraceLevel)
 		logger.SetOutput(os.Stdout)
 

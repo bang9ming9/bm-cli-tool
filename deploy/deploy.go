@@ -81,7 +81,7 @@ func Deploy(ctx context.Context, client utils.Backend, owner *bind.TransactOpts)
 		return err
 	}
 
-	/*
+	/* 4-1. 배포를 위한 생성자 데이터 셋팅
 	 *  constructor(
 	 *    address owner,
 	 *    address erc1155,
@@ -98,10 +98,12 @@ func Deploy(ctx context.Context, client utils.Backend, owner *bind.TransactOpts)
 	if err != nil {
 		return err
 	}
+	// 4-2. 배포 트랜잭션 전송 (to:nil, data: contract binary+constructorData)
 	pool := utils.NewTxPool(client)
 	if err := pool.Exec(utils.SendDynamicTx(client, owner, nil, append(common.FromHex(BmErc721Bin), constructorData...))); err != nil {
 		return err
 	}
+	// 4-3. 배포 결과 조회
 	var (
 		erc721        *bind.BoundContract
 		erc721Address common.Address
@@ -113,8 +115,8 @@ func Deploy(ctx context.Context, client utils.Backend, owner *bind.TransactOpts)
 		erc721 = bind.NewBoundContract(erc721Address, erc721ABI, client, client, client)
 	}
 
+	// 5. 배포 완료. 컨트랙트 정보 조회
 	callOpts := &bind.CallOpts{Context: ctx}
-
 	fmt.Println(strings.Repeat("==", 40))
 	defer fmt.Println(strings.Repeat("==", 40))
 
