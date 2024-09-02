@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/bang9ming9/bm-cli-tool/deploy"
+	"github.com/bang9ming9/bm-cli-tool/scan"
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,6 +32,7 @@ func init() {
 
 	app.Commands = append(app.Commands, []*cli.Command{
 		deploy.Command,
+		scan.Command,
 	}...)
 }
 func main() {

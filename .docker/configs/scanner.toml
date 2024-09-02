@@ -1,0 +1,15 @@
+[end-point]
+url = "ws://host.docker.internal:8546"
+
+[contracts]
+erc20 = "0xc65Ef3Dc8D75769b02928778774eaA288A429403"
+erc1155 = "0xc56dbaBCEd1a57f77209076bB6d711871a934f1f"
+governance = "0x6CEE2F2836abb07535a16AEf26e2C6326f7e2640"
+# erc721 = 0x8d4B69F0308293ed37a154369E5A2c91A13CCD65
+
+[db]
+name = "scanner"
+host = "postgres_db"
+port = 5432
+user = "bang9ming9"
+passowrd = "password"

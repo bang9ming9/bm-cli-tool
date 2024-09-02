@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+
+  deploy-contract:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - deploy
+      - --config=/configs/config.toml
+    volumes:
+      - ./.docker/configs/deploy.toml:/configs/config.toml
+      - ./.docker/keystore:/keystore
+
+  postgres_db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: bang9ming9
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: scanner
+    ports:
+      - 5432:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - scanner
+      - init
+      - --config=/configs/config.toml
+    depends_on:
+      - postgres_db
+    volumes:
+      - ./.docker/configs/scanner.toml:/configs/config.toml
+
+  scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - scanner
+      - --config=/configs/config.toml
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+    volumes:
+      - ./.docker/configs/scanner.toml:/configs/config.toml
+
+volumes:
+  pgdata:

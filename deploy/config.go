@@ -26,7 +26,6 @@ type Config struct {
 }
 
 func GetConfig(ctx *cli.Context) (*Config, error) {
-
 	config, err := flags.ReadConfig[Config](ctx)
 	if err != nil {
 		return nil, err

@@ -21,7 +21,7 @@ var (
 
 	ChainFlag = &cli.StringFlag{
 		Name:  "chain",
-		Usage: "chain directory",
+		Usage: "An execution client http or websocket endpoint.",
 	}
 
 	KeyStoreDirFlag = &cli.PathFlag{

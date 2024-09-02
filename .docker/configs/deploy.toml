@@ -1,0 +1,7 @@
+[end-point]
+url = "http://host.docker.internal:8545"
+
+[account]
+keystore = "/keystore"
+address = "0x14d95b8ecc31875f409c1fe5cd58b3b5cddfddfd"
+password = "password"
