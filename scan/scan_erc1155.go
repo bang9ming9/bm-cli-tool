@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
@@ -50,11 +51,11 @@ func (s *ERC1155Scanner) Topics() []common.Hash {
 	return ids
 }
 
-func (s *ERC1155Scanner) Save(db *gorm.DB, log types.Log) error {
+func (s *ERC1155Scanner) Work(db *gorm.DB, log types.Log) error {
 	logger := s.logger.WithField("log", log)
-	logger.Debug("Save")
+	logger.Debug("Work")
 
-	logger = logger.WithField("method", "Save")
+	logger = logger.WithField("method", "Work")
 	// Anonymous events are not supported.
 	if len(log.Topics) == 0 {
 		logger.Error(ErrNoEventSignature)
@@ -66,12 +67,12 @@ func (s *ERC1155Scanner) Save(db *gorm.DB, log types.Log) error {
 		return nil
 	}
 
-	return errors.Wrap(out.Create(db, log), "ERC1155Scanner")
+	return errors.Wrap(out.Do(db, log), "ERC1155Scanner")
 }
 
 type BmErc1155TransferSingle gov.BmErc1155TransferSingle
 
-func (event *BmErc1155TransferSingle) Create(db *gorm.DB, log types.Log) error {
+func (event *BmErc1155TransferSingle) Do(db *gorm.DB, log types.Log) error {
 	record := &dbtypes.ERC1155Transfer{
 		Raw: dbtypes.Raw{
 			TxHash: log.TxHash,
@@ -84,12 +85,12 @@ func (event *BmErc1155TransferSingle) Create(db *gorm.DB, log types.Log) error {
 		Id:       (*dbtypes.BigInt)(event.Id),
 		Value:    (*dbtypes.BigInt)(event.Value),
 	}
-	return db.Create(record).Error
+	return errors.Wrap(db.Create(record).Error, "BmErc1155TransferSingle")
 }
 
 type BmErc1155TransferBatch gov.BmErc1155TransferBatch
 
-func (event *BmErc1155TransferBatch) Create(db *gorm.DB, log types.Log) error {
+func (event *BmErc1155TransferBatch) Do(db *gorm.DB, log types.Log) error {
 	length := len(event.Ids)
 	for i := 0; i < length; i++ {
 		record := &dbtypes.ERC1155Transfer{
@@ -105,7 +106,7 @@ func (event *BmErc1155TransferBatch) Create(db *gorm.DB, log types.Log) error {
 			Value:    (*dbtypes.BigInt)(event.Values[i]),
 		}
 		if err := db.Create(record).Error; err != nil {
-			return err
+			return errors.Wrap(db.Create(record).Error, fmt.Sprintf("BmErc1155TransferBatch[%d]", i))
 		}
 	}
 	return nil

@@ -8,16 +8,20 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+type ContractConfig struct {
+	FromBlock  uint64         `toml:"from"` // 블록을 스캔할 시작 블럭
+	Faucet     common.Address `toml:"faucet"`
+	ERC20      common.Address `toml:"erc20"`
+	ERC1155    common.Address `toml:"erc1155"`
+	Governance common.Address `toml:"governance"`
+}
+
 type Config struct {
 	EndPoint struct {
 		URL string `toml:"url"`
 	} `toml:"end-point"`
-	Contracts struct {
-		ERC20      common.Address `toml:"erc20"`
-		ERC1155    common.Address `toml:"erc1155"`
-		Governance common.Address `toml:"governance"`
-	} `toml:"contracts"`
-	Database struct {
+	Contracts ContractConfig `toml:"contracts"`
+	Database  struct {
 		DBName   string `toml:"name"`
 		Host     string `toml:"host"`
 		Port     int    `toml:"port"`

@@ -1,7 +1,9 @@
 package dbtypes_test
 
 import (
+	"encoding/json"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
@@ -32,6 +34,26 @@ func TestBigInt(t *testing.T) {
 	require.Equal(t, createData.A, firstData.A)
 	require.Equal(t, createData.B, firstData.B)
 }
+func TestBigIntJSON(t *testing.T) {
+	type BigIntStruct struct {
+		A *dbtypes.BigInt
+		B *dbtypes.BigInt
+	}
+
+	db := testDB(t)
+	defer db.Migrator().DropTable(&BigIntStruct{})
+	require.NoError(t, db.AutoMigrate(&BigIntStruct{}))
+
+	uint256Max := new(big.Int).SetBytes(common.MaxHash[:])
+	createData := &BigIntStruct{A: (*dbtypes.BigInt)(common.Big0), B: (*dbtypes.BigInt)(uint256Max)}
+
+	bytes, err := json.Marshal(createData)
+	require.NoError(t, err)
+
+	copyData := new(BigIntStruct)
+	require.NoError(t, json.Unmarshal(bytes, copyData))
+	require.True(t, reflect.DeepEqual(createData, copyData))
+}
 
 func TestBigIntList(t *testing.T) {
 	type BigIntListStruct struct {
@@ -52,6 +74,32 @@ func TestBigIntList(t *testing.T) {
 	require.NoError(t, db.First(&firstData, createData.ID).Error)
 
 	results := firstData.List.Get()
+	require.Equal(t, len(list), len(results))
+	for i, l := range list {
+		require.True(t, results[i].Cmp(l) == 0)
+	}
+}
+func TestBigIntListJSON(t *testing.T) {
+	type BigIntListStruct struct {
+		gorm.Model
+		List *dbtypes.BigIntList
+	}
+
+	db := testDB(t)
+	defer db.Migrator().DropTable(&BigIntListStruct{})
+	require.NoError(t, db.AutoMigrate(&BigIntListStruct{}))
+
+	uint256Max := new(big.Int).SetBytes(common.MaxHash[:])
+	list := []*big.Int{common.Big0, common.Big1, common.Big2, common.Big3, uint256Max}
+	createData := &BigIntListStruct{List: (*dbtypes.BigIntList)(&list)}
+
+	bytes, err := json.Marshal(createData)
+	require.NoError(t, err)
+
+	copyData := new(BigIntListStruct)
+	json.Unmarshal(bytes, copyData)
+
+	results := copyData.List.Get()
 	require.Equal(t, len(list), len(results))
 	for i, l := range list {
 		require.True(t, results[i].Cmp(l) == 0)
@@ -129,6 +177,7 @@ func TestStringList(t *testing.T) {
 		require.True(t, results[i] == l)
 	}
 }
+
 func TestBytesList(t *testing.T) {
 	type BytesListStruct struct {
 		gorm.Model

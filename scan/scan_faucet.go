@@ -13,33 +13,33 @@ import (
 	"gorm.io/gorm"
 )
 
-type ERC20Scanner struct {
+type FaucetScanner struct {
 	address common.Address
 	abi     *abi.ABI
 	types   map[common.Hash]reflect.Type // event.ID => EventType
 	logger  *logrus.Entry
 }
 
-func NewERC20Scanner(address common.Address, logger *logrus.Logger) (*ERC20Scanner, error) {
-	aBI, err := gov.BmErc20MetaData.GetAbi()
+func NewFaucetScanner(address common.Address, logger *logrus.Logger) (*FaucetScanner, error) {
+	aBI, err := gov.FaucetMetaData.GetAbi()
 	if err != nil {
 		return nil, err
 	}
 	types := map[common.Hash]reflect.Type{
-		aBI.Events["Transfer"].ID: reflect.TypeOf(BmErc20Transfer{}),
+		aBI.Events["Claimed"].ID: reflect.TypeOf(FaucetClaimed{}),
 	}
 	if _, ok := types[common.Hash{}]; ok {
-		return nil, errors.Wrap(ErrInvalidEventID, "ERC20Scanner")
+		return nil, errors.Wrap(ErrInvalidEventID, "FaucetScanner")
 	}
 
-	return &ERC20Scanner{address, aBI, types, logger.WithField("scanner", "ERC20Scanner")}, nil
+	return &FaucetScanner{address, aBI, types, logger.WithField("scanner", "FaucetScanner")}, nil
 }
 
-func (s *ERC20Scanner) Address() common.Address {
+func (s *FaucetScanner) Address() common.Address {
 	return s.address
 }
 
-func (s *ERC20Scanner) Topics() []common.Hash {
+func (s *FaucetScanner) Topics() []common.Hash {
 	ids := make([]common.Hash, len(s.types))
 	index := 0
 	for id := range s.types {
@@ -49,7 +49,7 @@ func (s *ERC20Scanner) Topics() []common.Hash {
 	return ids
 }
 
-func (s *ERC20Scanner) Work(db *gorm.DB, log types.Log) error {
+func (s *FaucetScanner) Work(db *gorm.DB, log types.Log) error {
 	logger := s.logger.WithField("log", log)
 	logger.Debug("Work")
 
@@ -65,20 +65,18 @@ func (s *ERC20Scanner) Work(db *gorm.DB, log types.Log) error {
 		return nil
 	}
 
-	return errors.Wrap(out.Do(db, log), "ERC20Scanner")
+	return errors.Wrap(out.Do(db, log), "FaucetScanner")
 }
 
-type BmErc20Transfer gov.BmErc20Transfer
+type FaucetClaimed gov.FaucetClaimed
 
-func (event *BmErc20Transfer) Do(db *gorm.DB, log types.Log) error {
-	record := &dbtypes.ERC20Transfer{
+func (event *FaucetClaimed) Do(db *gorm.DB, log types.Log) error {
+	record := &dbtypes.FaucetClaimed{
 		Raw: dbtypes.Raw{
 			TxHash: log.TxHash,
 			Block:  log.BlockNumber,
 		},
-		From:  event.From,
-		To:    event.To,
-		Value: (*dbtypes.BigInt)(event.Value),
+		Account: event.Account,
 	}
-	return errors.Wrap(db.Create(record).Error, "BmErc20Transfer")
+	return errors.Wrap(db.Create(record).Error, "FaucetClaimed")
 }

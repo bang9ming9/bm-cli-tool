@@ -54,6 +54,7 @@ common.Address, common.Hash 는 고정길이 Byte 로 저장합니다. char(20),
 - BmErc20 (Transfer) # 홀더 확인
 - BmErc1155 (TransferSinge, TransferBatch) # 활동중인 유저 확인
 - BmGovernor (ProposalCreated, ProposalCanceled) # 진행중인 Proposal 확인
+- Faucet (Claimed)
 
 ## Databas init
 ```bash
