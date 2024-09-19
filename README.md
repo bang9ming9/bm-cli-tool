@@ -45,6 +45,12 @@ password = "password"
 bct deploy --config ./deploy.toml
 ```
 
+# Event-Logger
+블록체인 노드에서 발생하는 이벤트를 컨트랙트 주소로 필터하여 수집합니다.
+types.Log 는 mongoDB 에 저장합니다.
+mongodb 에 저장된 데이터와 실시간으로 스캔하는 모든 이벤트는 
+gRPC(stream) 통신을 통해 읽을 수 있습니다.
+
 # Scanner
 bm-governance 에서 발생하는 몇가지 이벤트를 수집합니다.
 이벤트는 postgresDB 에 저장합니다.

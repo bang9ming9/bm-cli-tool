@@ -10,8 +10,39 @@ services:
       - deploy
       - --config=/configs/config.toml
     volumes:
-      - ./.docker/configs/deploy.toml:/configs/config.toml
+      - ./.docker/configs/contractdeploy.toml:/configs/config.toml
       - ./.docker/keystore:/keystore
+    networks:
+      - shared_network
+
+  mongo-db:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bang9ming9
+      MONGO_INITDB_ROOT_PASSWORD: password
+    networks:
+      - bridge_network
+
+  event-logger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - event-logger
+      - --config=/configs/config.toml
+    ports:
+      - 50501:50501
+    depends_on:
+      - mongo-db
+    volumes:
+      - ./.docker/configs/logger.toml:/configs/config.toml
+    networks:
+      - shared_network
+      - bridge_network
 
   postgres_db:
     image: postgres:13
@@ -23,6 +54,8 @@ services:
       - 5432:5432
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - bridge_network
 
   db-init:
     build:
@@ -36,6 +69,8 @@ services:
       - postgres_db
     volumes:
       - ./.docker/configs/scanner.toml:/configs/config.toml
+    networks:
+      - bridge_network
 
   scanner:
     build:
@@ -44,12 +79,25 @@ services:
     command:
       - scanner
       - --config=/configs/config.toml
+    ports:
+      - 8090:8090
     depends_on:
       db-init:
         condition: service_completed_successfully
 
     volumes:
       - ./.docker/configs/scanner.toml:/configs/config.toml
+    networks:
+      - shared_network
+      - bridge_network
 
 volumes:
   pgdata:
+  mongo-data:
+    driver: local
+
+networks:
+  shared_network:
+    external: true
+  bridge_network:
+    driver: bridge

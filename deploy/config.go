@@ -15,9 +15,9 @@ import (
 )
 
 type Config struct {
-	EndPoint struct {
-		URL string `toml:"url"`
-	} `toml:"end-point"`
+	Chain struct {
+		URI string `toml:"uri"`
+	} `toml:"chain"`
 	Account struct {
 		Keystore string         `toml:"keystore"`
 		Address  common.Address `toml:"address"`
@@ -32,7 +32,7 @@ func GetConfig(ctx *cli.Context) (*Config, error) {
 	}
 
 	if ctx.IsSet(flags.ChainFlag.Name) {
-		config.EndPoint.URL = ctx.Path(flags.ChainFlag.Name)
+		config.Chain.URI = ctx.Path(flags.ChainFlag.Name)
 	}
 
 	if ctx.IsSet(flags.KeyStoreDirFlag.Name) {

@@ -17,9 +17,9 @@ type ContractConfig struct {
 }
 
 type Config struct {
-	EndPoint struct {
-		URL string `toml:"url"`
-	} `toml:"end-point"`
+	EventLogger struct {
+		URI string `toml:"uri"`
+	} `toml:"event-logger"`
 	Contracts ContractConfig `toml:"contracts"`
 	Database  struct {
 		DBName   string `toml:"name"`

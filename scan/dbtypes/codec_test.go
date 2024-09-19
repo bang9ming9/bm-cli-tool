@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
+	"github.com/bang9ming9/bm-cli-tool/testutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -20,7 +20,7 @@ func TestBigInt(t *testing.T) {
 		B *dbtypes.BigInt
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&BigIntStruct{})
 	require.NoError(t, db.AutoMigrate(&BigIntStruct{}))
 
@@ -40,7 +40,7 @@ func TestBigIntJSON(t *testing.T) {
 		B *dbtypes.BigInt
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&BigIntStruct{})
 	require.NoError(t, db.AutoMigrate(&BigIntStruct{}))
 
@@ -61,7 +61,7 @@ func TestBigIntList(t *testing.T) {
 		List *dbtypes.BigIntList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&BigIntListStruct{})
 	require.NoError(t, db.AutoMigrate(&BigIntListStruct{}))
 	uint256Max := new(big.Int).SetBytes(common.MaxHash[:])
@@ -85,7 +85,7 @@ func TestBigIntListJSON(t *testing.T) {
 		List *dbtypes.BigIntList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&BigIntListStruct{})
 	require.NoError(t, db.AutoMigrate(&BigIntListStruct{}))
 
@@ -112,7 +112,7 @@ func TestAddressList(t *testing.T) {
 		List *dbtypes.AddressList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&AddressListStruct{})
 	require.NoError(t, db.AutoMigrate(&AddressListStruct{}))
 
@@ -136,7 +136,7 @@ func TestHashList(t *testing.T) {
 		List *dbtypes.HashList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&HashListStruct{})
 	require.NoError(t, db.AutoMigrate(&HashListStruct{}))
 
@@ -160,7 +160,7 @@ func TestStringList(t *testing.T) {
 		List *dbtypes.StringList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&StringListStruct{})
 	require.NoError(t, db.AutoMigrate(&StringListStruct{}))
 
@@ -184,7 +184,7 @@ func TestBytesList(t *testing.T) {
 		List *dbtypes.BytesList
 	}
 
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
 	defer db.Migrator().DropTable(&BytesListStruct{})
 	require.NoError(t, db.AutoMigrate(&BytesListStruct{}))
 
@@ -200,11 +200,4 @@ func TestBytesList(t *testing.T) {
 	for i, l := range list {
 		require.Equal(t, results[i], l, i)
 	}
-}
-
-func testDB(t *testing.T) *gorm.DB {
-	// SQLite 메모리 데이터베이스 사용
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	return db
 }

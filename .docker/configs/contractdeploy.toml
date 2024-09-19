@@ -1,5 +1,5 @@
-[end-point]
-url = "http://host.docker.internal:8545"
+[chain]
+uri = "http://eth-pos-devnet-geth-1:8545"
 
 [account]
 keystore = "/keystore"

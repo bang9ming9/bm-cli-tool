@@ -1,0 +1,57 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+package logger;
+option go_package = "../logger";
+
+// protoc --plugin=protoc-gen-go-grpc=$HOME/go/bin/protoc-gen-go-grpc \
+// --go_out=. \
+// --go-grpc_out=. \
+// scanner.proto
+
+service Logger {
+  // Public
+  rpc Info(google.protobuf.Empty) returns (InfoResMessage) {}
+  rpc Connect(ConnectReqMessage) returns (stream Log) {}
+}
+
+service Admin{ 
+  // Admin
+  rpc Add(AddressReqMessage) returns(BlockNumberMessage) {}
+  rpc Remove(AddressReqMessage) returns(BlockNumberMessage) {}
+  rpc Start(BlockNumberMessage) returns(google.protobuf.Empty) {}
+  rpc Stop(google.protobuf.Empty) returns(BlockNumberMessage) {}
+}
+
+message Log {
+  message Raw {
+    uint64 blockNumber = 1;
+    bytes blockHash = 2;
+    uint32 index = 3;
+    bytes txHash = 4;
+    uint32 txIndex = 5;
+  }
+
+  Raw raw = 1;
+  bytes address = 2;
+  repeated bytes topics = 3;
+  bytes data = 4;
+  bool removed = 5;
+}
+
+message InfoResMessage {
+  repeated bytes address = 1;
+}
+
+message ConnectReqMessage{
+  uint64 fromBlock = 1;
+  bytes address = 2;
+}
+
+message BlockNumberMessage {
+  uint64 blockNumber = 1;
+}
+
+message AddressReqMessage {
+  bytes address = 1;
+}

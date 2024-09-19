@@ -8,50 +8,54 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bang9ming9/bm-cli-tool/eventlogger"
+	"github.com/bang9ming9/bm-cli-tool/eventlogger/logger"
 	"github.com/bang9ming9/bm-cli-tool/scan"
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
+	"github.com/bang9ming9/bm-cli-tool/testutils"
 	gabis "github.com/bang9ming9/bm-governance/abis"
 	gov "github.com/bang9ming9/bm-governance/test"
 	"github.com/bang9ming9/go-hardhat/bms"
-	utils "github.com/bang9ming9/go-hardhat/bms/utils"
+	"github.com/bang9ming9/go-hardhat/bms/bmsutils"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
-
-func testDB(t *testing.T) *gorm.DB {
-	// SQLite 메모리 데이터베이스 사용
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	db.AutoMigrate(dbtypes.AllTables...)
-	return db
-}
 
 func TestScannerBasic(t *testing.T) {
 	// 0: log 데이터 생성
 	// 0-1 : 컨트랙트 배포
 	// 0-1-1 : bm-governance 및 실행 테스트 컨트랙트 배포
-	backend, contracts := gov.DeployBMGovernorWithBackend(t)
+	args, backend, contracts, close := makeLogServerArgs(t)
+	defer close()
+	loggerClient, adminClient, close2 := startEventLogger(t, args)
+	defer close2()
+
 	ERC20, ERC1155 := contracts.Erc20, contracts.Erc1155
 	backend.Commit()
 	// 0-1-2 : Faucet 컨트랙트 배포 및 코인 충전
 	faucet, _, FAUCET, err := gabis.DeployFaucet(backend.Owner, backend)
 	require.NoError(t, err)
 	backend.Commit()
-	backend.Owner.Value = utils.ToWei(100)
-	_, err = utils.SendDynamicTx(backend, backend.Owner, &faucet, []byte{})
+	backend.Owner.Value = bmsutils.ToWei(100)
+	_, err = bmsutils.SendDynamicTx(backend, backend.Owner, &faucet, []byte{})
 	require.NoError(t, err)
 	backend.Commit()
 	backend.Owner.Value = nil
+	_, err = adminClient.Add(context.TODO(), &logger.AddressReqMessage{Address: faucet[:]})
+	require.NoError(t, err)
 	// 0-2 : ERC20 발급 (From:0, To:Owner, Value:COST)
 	// 0-2-1 : 테스터 계정 생성 및 Faucet
-	tester := bms.GetEOA(t)
-	_, err = FAUCET.Claim(tester)
+	tester := bms.GetTEoa(t)
+	_, err = FAUCET.Claim(tester, tester.From)
 	require.NoError(t, err)
 	backend.Commit()
 
@@ -115,37 +119,31 @@ func TestScannerBasic(t *testing.T) {
 	_, err = ERC1155.Funcs().Mint(tester, tester.From)
 	require.NoError(t, err)
 	backend.Commit()
-	receiver := bms.GetEOA(t)
+	receiver := bms.GetTEoa(t)
 	_, err = ERC1155.Funcs().SafeBatchTransferFrom(tester, tester.From, receiver.From, []*big.Int{currentID, currentID2}, []*big.Int{cost, cost}, []byte{})
 	require.NoError(t, err)
 	backend.Commit()
 	// 0: end
 
 	// 1: scan.Scan() 함수 실행
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.TextFormatter{})
-	logger.SetOutput(os.Stderr)
-	logger.SetLevel(logrus.ErrorLevel)
+	logentry := logrus.New()
+	logentry.SetFormatter(&logrus.TextFormatter{})
+	logentry.SetOutput(os.Stderr)
+	logentry.SetLevel(logrus.ErrorLevel)
 	// 1-1: 테스트 디비 생성
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
+	require.NoError(t, db.AutoMigrate(dbtypes.AllTables...))
 	// 1-2: Scan 실행
-	ctx := context.Background()
-	stopCh := make(chan os.Signal, 1)
-	tick := make(chan uint64)
 	go func() {
-		head, err := backend.BlockByHash(ctx, backend.Commit())
-		require.NoError(t, err)
-		tick <- head.NumberU64()
-		time.Sleep(1e9)
-		stopCh <- os.Interrupt // 아래의 Scan 종료 유도
+		require.NoError(t, scan.Scan(context.Background(), make(chan os.Signal), scan.ContractConfig{
+			FromBlock:  1,
+			Faucet:     faucet,
+			ERC20:      ERC20.Address(),
+			ERC1155:    ERC1155.Address(),
+			Governance: contracts.Governor.Address(),
+		}, db, loggerClient, logentry))
 	}()
-
-	require.NoError(t, scan.Scan(ctx, scan.ContractConfig{
-		Faucet:     faucet,
-		ERC20:      ERC20.Address(),
-		ERC1155:    ERC1155.Address(),
-		Governance: contracts.Governor.Address(),
-	}, logger, stopCh, db, backend, tick))
+	time.Sleep(3e9)
 	// 1:end
 
 	// 데이터 확인 (ERC20_Transfer)
@@ -210,4 +208,64 @@ func TestScannerBasic(t *testing.T) {
 			require.False(t, record.Active) // canceled
 		}
 	}
+}
+
+type EventLoggerArgs struct {
+	stopCh     chan os.Signal
+	addr       string
+	log        *logrus.Logger
+	client     *bms.Backend
+	collection *mongo.Collection
+	query      *ethereum.FilterQuery
+}
+
+func makeLogServerArgs(t *testing.T) (EventLoggerArgs, *bms.Backend, *gov.BMGovernor, func()) {
+	ctx := context.Background()
+	dbClient, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://bang9ming9:password@localhost:27017"))
+	require.NoError(t, err)
+	collection := dbClient.Database("test").Collection("testcollection")
+	collection.Drop(ctx)
+
+	backend, contracts := gov.DeployBMGovernorWithBackend(t)
+
+	addresses := []common.Address{contracts.Erc20.Address(), contracts.Erc1155.Address(), contracts.Governor.Address()}
+
+	log := logrus.New()
+	log.SetLevel(logrus.DebugLevel)
+
+	args := EventLoggerArgs{
+		stopCh:     make(chan os.Signal),
+		addr:       "localhost:50503",
+		log:        log,
+		client:     backend,
+		collection: collection,
+		query: &ethereum.FilterQuery{
+			Addresses: addresses,
+			FromBlock: common.Big1,
+		},
+	}
+
+	return args, backend, contracts, func() { dbClient.Disconnect(ctx) }
+}
+
+func startEventLogger(t *testing.T, args EventLoggerArgs) (logger.LoggerClient, logger.AdminClient, func()) {
+	go func() {
+		require.NoError(t, eventlogger.NewLoggerServer(
+			args.stopCh,
+			args.addr,
+			args.log,
+			args.client,
+			args.collection,
+			args.query,
+		))
+	}()
+
+	for i := 0; i < 3; i++ {
+		time.Sleep(1e9)
+		conn, err := grpc.NewClient("localhost:50503", grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err == nil {
+			return logger.NewLoggerClient(conn), logger.NewAdminClient(conn), func() { args.stopCh <- os.Interrupt }
+		}
+	}
+	panic("fail to connect grpc")
 }

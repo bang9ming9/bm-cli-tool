@@ -14,17 +14,19 @@ import (
 
 	"github.com/bang9ming9/bm-cli-tool/scan"
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
+	"github.com/bang9ming9/bm-cli-tool/testutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAPI(t *testing.T) {
-	engine := gin.Default()
-	db := testDB(t)
+	db := testutils.NewSQLMock(t)
+	db.AutoMigrate(dbtypes.AllTables...)
 
+	engine := gin.Default()
+	v1 := engine.Group("/test")
 	{
-		v1 := engine.Group("/test")
 		require.NoError(t, scan.NewERC20Api(db).RegisterApi(v1))
 		require.NoError(t, scan.NewERC1155Api(db).RegisterApi(v1))
 		require.NoError(t, scan.NewFaucetApi(db).RegisterApi(v1))
@@ -35,7 +37,6 @@ func TestAPI(t *testing.T) {
 		Addr:    ":8080",
 		Handler: engine,
 	}
-
 	go func() {
 		require.Equal(t, http.ErrServerClosed, srv.ListenAndServe())
 	}()
@@ -490,8 +491,9 @@ func TestAPI(t *testing.T) {
 }
 
 func GetRequest[T any](api string) (int, T, error) {
-	response, err := http.Get("http://localhost:8080/test" + api)
 	data := new(T)
+
+	response, err := http.Get("http://localhost:8080/test" + api)
 	if err != nil {
 		return 0, *data, err
 	}

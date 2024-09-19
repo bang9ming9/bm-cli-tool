@@ -7,7 +7,7 @@ import (
 )
 
 type IRecord interface {
-	Do(db *gorm.DB, log types.Log) error
+	Do(log types.Log) func(db *gorm.DB) error
 }
 
 type Raw struct {

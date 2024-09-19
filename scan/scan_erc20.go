@@ -5,7 +5,6 @@ import (
 
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
 	gov "github.com/bang9ming9/bm-governance/abis"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
@@ -14,13 +13,10 @@ import (
 )
 
 type ERC20Scanner struct {
-	address common.Address
-	abi     *abi.ABI
-	types   map[common.Hash]reflect.Type // event.ID => EventType
-	logger  *logrus.Entry
+	Scanner
 }
 
-func NewERC20Scanner(address common.Address, logger *logrus.Logger) (*ERC20Scanner, error) {
+func NewERC20Scanner(address common.Address, logentry *logrus.Logger) (*ERC20Scanner, error) {
 	aBI, err := gov.BmErc20MetaData.GetAbi()
 	if err != nil {
 		return nil, err
@@ -32,53 +28,24 @@ func NewERC20Scanner(address common.Address, logger *logrus.Logger) (*ERC20Scann
 		return nil, errors.Wrap(ErrInvalidEventID, "ERC20Scanner")
 	}
 
-	return &ERC20Scanner{address, aBI, types, logger.WithField("scanner", "ERC20Scanner")}, nil
-}
-
-func (s *ERC20Scanner) Address() common.Address {
-	return s.address
-}
-
-func (s *ERC20Scanner) Topics() []common.Hash {
-	ids := make([]common.Hash, len(s.types))
-	index := 0
-	for id := range s.types {
-		ids[index] = id
-		index++
-	}
-	return ids
-}
-
-func (s *ERC20Scanner) Work(db *gorm.DB, log types.Log) error {
-	logger := s.logger.WithField("log", log)
-	logger.Debug("Work")
-
-	logger = logger.WithField("method", "Work")
-	// Anonymous events are not supported.
-	if len(log.Topics) == 0 {
-		logger.Error(ErrNoEventSignature)
-		return nil
-	}
-	out, err := parse(log, s.types[log.Topics[0]], s.abi)
-	if err != nil {
-		logger.Error(err)
-		return nil
-	}
-
-	return errors.Wrap(out.Do(db, log), "ERC20Scanner")
+	return &ERC20Scanner{Scanner{
+		address, aBI, types, logentry.WithField("scanner", "ERC20Scanner"),
+	}}, nil
 }
 
 type BmErc20Transfer gov.BmErc20Transfer
 
-func (event *BmErc20Transfer) Do(db *gorm.DB, log types.Log) error {
-	record := &dbtypes.ERC20Transfer{
-		Raw: dbtypes.Raw{
-			TxHash: log.TxHash,
-			Block:  log.BlockNumber,
-		},
-		From:  event.From,
-		To:    event.To,
-		Value: (*dbtypes.BigInt)(event.Value),
+func (event *BmErc20Transfer) Do(log types.Log) func(db *gorm.DB) error {
+	return func(db *gorm.DB) error {
+		record := &dbtypes.ERC20Transfer{
+			Raw: dbtypes.Raw{
+				TxHash: log.TxHash,
+				Block:  log.BlockNumber,
+			},
+			From:  event.From,
+			To:    event.To,
+			Value: (*dbtypes.BigInt)(event.Value),
+		}
+		return errors.Wrap(db.Create(record).Error, "BmErc20Transfer")
 	}
-	return errors.Wrap(db.Create(record).Error, "BmErc20Transfer")
 }

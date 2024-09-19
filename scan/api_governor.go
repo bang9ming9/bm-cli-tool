@@ -3,15 +3,11 @@ package scan
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/bang9ming9/bm-cli-tool/scan/dbtypes"
-	gov "github.com/bang9ming9/bm-governance/abis"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -35,63 +31,6 @@ func (api *GovernorApi) RegisterApi(engine *gin.RouterGroup) error {
 		votes.GET("/history/:addr", checkParamAddress, api.voteHistory)
 	}
 	return nil
-}
-
-func (api *GovernorApi) Loop(governor *gov.BmGovernorCaller, logr *logrus.Logger, ticker <-chan struct{}) *GovernorApi {
-	logger := logr.WithFields(logrus.Fields{"module": "GovernorApi", "method": "Loop"})
-	if governor == nil {
-		logger.Warn("nil governor")
-	} else if ticker == nil {
-		logger.Warn("nil ticker")
-	} else {
-		go func() {
-			lock, callOpts := sync.Mutex{}, new(bind.CallOpts)
-			for {
-				<-ticker
-				if lock.TryLock() {
-					go func() {
-						defer lock.Unlock()
-						ctx, cancel := context.WithCancel(context.Background())
-						defer cancel()
-						proposals, err := pastProposals(ctx, api.db)
-						if err != nil {
-							logger.WithField("message", err.Error()).Error("fail to get past proposals")
-							return
-						}
-
-						callOpts.Context = ctx
-						for _, proposal := range proposals {
-							state, err := governor.State(callOpts, proposal.ProposalId.Get())
-							if err != nil {
-								logger.WithFields(logrus.Fields{"message": err.Error(), "proposalId": proposal.ProposalId.Get().String()}).Error("fail to get state")
-								return
-							}
-							/*
-							 * 	enum ProposalState {
-							 *		Pending, 	// 0
-							 *		Active, 	// 1
-							 *		Canceled, 	// 2
-							 *		Defeated, 	// 3
-							 *  >>>	Succeeded,	// 4
-							 *	>>>	Queued,		// 5
-							 *		Expired, 	// 6
-							 *		Executed 	// 7
-							 *	}
-							 */
-							if state == 4 || state == 5 {
-								return
-							}
-							proposal.Active = false
-							if err := api.db.Save(proposal).Error; err != nil {
-								logger.WithField("message", err.Error()).Error("fail to update proposals")
-							}
-						}
-					}()
-				}
-			}
-		}()
-	}
-	return api
 }
 
 // ////////////

@@ -7,7 +7,7 @@ import (
 
 	"github.com/bang9ming9/bm-cli-tool/cmd/flags"
 	gov "github.com/bang9ming9/bm-governance/types"
-	utils "github.com/bang9ming9/go-hardhat/bms/utils"
+	"github.com/bang9ming9/go-hardhat/bms/bmsutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,7 +35,7 @@ var Command = &cli.Command{
 			return err
 		}
 		// 1. node 연결
-		client, err := ethclient.DialContext(ctx.Context, cfg.EndPoint.URL)
+		client, err := ethclient.DialContext(ctx.Context, cfg.Chain.URI)
 		if err != nil {
 			return err
 		}
@@ -51,7 +51,7 @@ var Command = &cli.Command{
 	},
 }
 
-func Deploy(ctx context.Context, client utils.Backend, owner *bind.TransactOpts) error {
+func Deploy(ctx context.Context, client bmsutils.Backend, owner *bind.TransactOpts) error {
 	// 3. bm-governance 컨트랙트 배포
 	// bm-governance 에서 테스트를 위해 배포했던 스크립트 사용
 	govContracts, err := gov.DeployBMGovernor(ctx, owner, client, 60e9,
@@ -99,8 +99,8 @@ func Deploy(ctx context.Context, client utils.Backend, owner *bind.TransactOpts)
 		return err
 	}
 	// 4-2. 배포 트랜잭션 전송 (to:nil, data: contract binary+constructorData)
-	pool := utils.NewTxPool(client)
-	if err := pool.Exec(utils.SendDynamicTx(client, owner, nil, append(common.FromHex(BmErc721Bin), constructorData...))); err != nil {
+	pool := bmsutils.NewTxPool(client)
+	if err := pool.Exec(bmsutils.SendDynamicTx(client, owner, nil, append(common.FromHex(BmErc721Bin), constructorData...))); err != nil {
 		return err
 	}
 	// 4-3. 배포 결과 조회
